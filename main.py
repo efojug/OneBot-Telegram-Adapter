@@ -1,81 +1,122 @@
 import asyncio
 import json
-from typing import Coroutine
+# from typing import Coroutine, Optional
 
 from telegram.ext import MessageHandler, filters, Application
 
 from config import load_config
 from websocket_client import websocket_handler
 
+def _handle_ws_send_result(fut: asyncio.Future, event_details: str):
+    try:
+        fut.result()
+    except Exception as e:
+        print(f"WebSocket send operation for event {event_details} failed: {e}")
+
 async def do_nothing()-> None:
     ...
 
-async def telegram_message_to_onebot(update, context) -> Coroutine:
+async def telegram_message_to_onebot(update, context) -> None:
     message = update.effective_message
-    if message is None or message.from_user is None:
-        # TODO how to return
-        return do_nothing()
+    if not message or not message.from_user:
+        return
+
     user = message.from_user
-    nickname = user.username or (user.first_name + (user.last_name or ''))
+    nickname = user.username or (user.first_name + (user.last_name if user.last_name else ''))
     if not nickname:
         nickname = "匿名用户"
+
     time = message.date.timestamp()
     self_id = context.bot.get_me().id
     raw_text = message.text or ""
+
     event = {
         "time": int(time),
-        "self_id": self_id,
         "post_type": "message",
-        "message": [{"type": "text", "data": {"text": raw_text}}],
-        "raw_message": raw_text,
-        "font": 0,
-        "sender": {
-            "user_id": user.id,
-            "nickname": nickname,
-            "sex": "",
-            "age": 0
-        }
+        "self_id": self_id
     }
+
     if message.chat.type in ["group", "supergroup"]:
         event.update({
+            "message": [{"type": "text", "data": {"text": raw_text}}],
+            "font": 0,
+            "raw_message": raw_text,
             "message_type": "group",
             "sub_type": "normal",
             "message_id": message.message_id,
             "group_id": message.chat.id,
-            "user_id": user.id
+            "user_id": user.id,
+            "sender": {
+                "user_id": user.id,
+                "nickname": nickname,
+                "sex": "",
+                "age": 0
+            }
         })
     elif message.chat.type == "private":
         event.update({
+            "message": [{"type": "text", "data": {"text": raw_text}}],
+            "font": 0,
+            "raw_message": raw_text,
             "message_type": "private",
             "sub_type": "friend",
             "message_id": message.message_id,
             "user_id": user.id,
+            "sender": {
+                "user_id": user.id,
+                "nickname": nickname,
+                "sex": "",
+                "age": 0
+            }
         })
     else:
         print(f"不支持的消息来源: {message.chat.type}")
-        # TODO how to return *2
-        return do_nothing()
+        return
 
     ws = context.bot_data.get('ws')
-    if ws:
+    main_loop = context.bot_data.get('loop')
+
+    if ws and main_loop:
         try:
-            asyncio.run_coroutine_threadsafe(ws.send(json.dumps(event)), context.bot_data['loop'])
+            event_json = json.dumps(event)
+            coro = ws.send(event_json)
+            future = asyncio.run_coroutine_threadsafe(coro, main_loop)
+            future.add_done_callback(lambda fut: _handle_ws_send_result(fut, f"type {event['message_type']}, id {message.message_id}"))
+            print(f"Scheduled event to be sent to OneBot: (msg_id: {message.message_id})")
         except Exception as e:
             print(f"发送OneBot事件失败!! {e}")
 
+    else:
+        if not ws: print("WebSocket connection ('ws') not available in bot_data.")
+        if not main_loop: print("Asyncio event loop ('loop') not available in bot_data.")
+    return None
 
 def main():
     config = load_config()
-    if config.proxy_url.strip() == "": application = Application.builder().token(config.telegram_token).proxy(config.proxy_url).get_updates_proxy(config.proxy_url).build()
-    else: application = Application.builder().token(config.telegram_token).build()
+    builder = Application.builder().token(config.telegram_token)
+
+    if config.proxy_url and config.proxy_url.strip():
+        print(f"Using proxy: {config.proxy_url}")
+        builder.proxy(config.proxy_url).get_updates_proxy(config.proxy_url).build()
+
+    application = builder.build()
 
     application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, telegram_message_to_onebot))
-    application.start_polling()
+
+    try:
+        loop = asyncio.get_running_loop()
+    except RuntimeError:
+        loop = asyncio.new_event_loop()
+        asyncio.set_event_loop(loop)
+
     bot = application.bot
-    loop = asyncio.get_event_loop()
     bot_data = application.bot_data
     bot_data['ws'] = None
     bot_data['loop'] = loop
+
+    application.start_polling()
+
+    print("Telegram Bot polling started.")
 
     try:
         loop.run_until_complete(websocket_handler(bot, config))
@@ -83,7 +124,6 @@ def main():
         print("正在优雅关闭Adapter...")
     finally:
         application.stop()
-        loop.stop()
 
 if __name__ == "__main__":
     main()
