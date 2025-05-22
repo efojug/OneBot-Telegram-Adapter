@@ -95,9 +95,13 @@ def main():
     config = load_config()
     builder = Application.builder().token(config.telegram_token)
 
+    proxy_url = config.proxy_url
     if config.proxy_url and config.proxy_url.strip():
-        print(f"Using proxy: {config.proxy_url}")
-        builder.proxy(config.proxy_url).get_updates_proxy(config.proxy_url).build()
+        if not proxy_url.lower().startswith("http://" or "https://" or "socks://"):
+            proxy_url = "http://" + proxy_url
+
+        print(f"Using proxy: {proxy_url}")
+        builder.proxy(proxy_url).get_updates_proxy(proxy_url).build()
 
     application = builder.build()
 
@@ -114,16 +118,15 @@ def main():
     bot_data['ws'] = None
     bot_data['loop'] = loop
 
-    application.start_polling()
-
-    print("Telegram Bot polling started.")
+    print("Starting telegram bot polling.")
 
     try:
         loop.run_until_complete(websocket_handler(bot, config))
     except KeyboardInterrupt:
         print("正在优雅关闭Adapter...")
-    finally:
         application.stop()
+
+    application.run_polling()
 
 if __name__ == "__main__":
     main()
