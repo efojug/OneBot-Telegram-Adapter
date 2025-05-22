@@ -9,6 +9,7 @@ from config import load_config
 from websocket_client import websocket_handler
 
 async def do_nothing()-> None:
+    ...
 
 async def telegram_message_to_onebot(update, context) -> Coroutine:
     message = update.effective_message
