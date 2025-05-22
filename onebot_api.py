@@ -42,3 +42,14 @@ class OneBotApi:
             except TelegramError as e:
                 print(f"发送群聊消息失败!! {e} : chat_id={group_id}, text={text}, reply_id={reply_id}")
                 raise
+
+    async def get_group_info(self, group_id: int) -> {}:
+        chat_full_info = await self.bot.get_chat(group_id)
+        return {
+        "group_all_shut": 0,
+        "group_remark": "",
+        "group_id": group_id,
+        "group_name": chat_full_info.title,
+        "member_count": await self.bot.get_chat_member_count(chat_id=group_id),
+        "max_member_count": 2000
+        }
