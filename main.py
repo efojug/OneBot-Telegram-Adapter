@@ -1,5 +1,6 @@
 import asyncio
 import json
+from types import coroutine
 from typing import Coroutine
 
 from telegram.ext import MessageHandler, filters, Application
@@ -7,12 +8,13 @@ from telegram.ext import MessageHandler, filters, Application
 from config import load_config
 from websocket_client import websocket_handler
 
+async def do_nothing()-> None:
 
 async def telegram_message_to_onebot(update, context) -> Coroutine:
     message = update.effective_message
     if message is None or message.from_user is None:
         # TODO how to return
-        return
+        return do_nothing()
     user = message.from_user
     nickname = user.username or (user.first_name + (user.last_name or ''))
     if not nickname:
@@ -52,7 +54,7 @@ async def telegram_message_to_onebot(update, context) -> Coroutine:
     else:
         print(f"不支持的消息来源: {message.chat.type}")
         # TODO how to return *2
-        return
+        return do_nothing()
 
     ws = context.bot_data.get('ws')
     if ws:
