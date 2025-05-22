@@ -1,6 +1,7 @@
 import asyncio
 import json
-# from typing import Coroutine, Optional
+import sys
+
 
 from telegram.ext import MessageHandler, filters, Application
 
@@ -74,21 +75,20 @@ async def telegram_message_to_onebot(update, context) -> None:
         return
 
     ws = context.bot_data.get('ws')
-    main_loop = context.bot_data.get('loop')
 
-    if ws and main_loop:
+    if ws:
         try:
             event_json = json.dumps(event)
-            coro = ws.send(event_json)
-            future = asyncio.run_coroutine_threadsafe(coro, main_loop)
-            future.add_done_callback(lambda fut: _handle_ws_send_result(fut, f"type {event['message_type']}, id {message.message_id}"))
+            send_task = asyncio.create_task(ws.send(event_json))
+            send_task.add_done_callback(
+                lambda fut: _handle_ws_send_result(fut, f"type {event['message_type']}, id {message.message_id}")
+            )
             print(f"Scheduled event to be sent to OneBot: (msg_id: {message.message_id})")
         except Exception as e:
             print(f"发送OneBot事件失败!! {e}")
 
     else:
         if not ws: print("WebSocket connection ('ws') not available in bot_data.")
-        if not main_loop: print("Asyncio event loop ('loop') not available in bot_data.")
     return None
 
 def main():
@@ -97,7 +97,7 @@ def main():
 
     proxy_url = config.proxy_url
     if config.proxy_url and config.proxy_url.strip():
-        if not proxy_url.lower().startswith("http://" or "https://" or "socks://"):
+        if not proxy_url.lower().startswith(("http://", "https://", "socks4://", "socks5://")):
             proxy_url = "http://" + proxy_url
 
         print(f"Using proxy: {proxy_url}")
@@ -113,20 +113,35 @@ def main():
         loop = asyncio.new_event_loop()
         asyncio.set_event_loop(loop)
 
-    bot = application.bot
     bot_data = application.bot_data
     bot_data['ws'] = None
     bot_data['loop'] = loop
 
+    websocket_client_task = loop.create_task(websocket_handler(application, config))
+
     print("Starting telegram bot polling.")
 
     try:
-        loop.run_until_complete(websocket_handler(bot, config))
+        application.run_polling(close_loop=False)
+
     except KeyboardInterrupt:
         print("正在优雅关闭Adapter...")
-        application.stop()
 
-    application.run_polling()
+    finally:
+        if websocket_client_task and not websocket_client_task.done():
+            websocket_client_task.cancel()
+            try:
+                if loop.is_running():
+                    loop.run_until_complete(websocket_client_task)
+
+            except asyncio.CancelledError:
+                print("WebSocket client closed.")
+
+        if not loop.is_closed():
+            loop.close()
+
+        print("Application Closed!!")
+        sys.exit(0)
 
 if __name__ == "__main__":
     main()

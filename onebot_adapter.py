@@ -8,7 +8,7 @@ class OneBotAdapter:
     async def handle_action(self, action: str, params: dict):
         response = {
             "status": "failed",
-            "retcode": 1,  # Default to error
+            "retcode": 1,
             "data": None,
             "message": ""
         }
@@ -24,7 +24,7 @@ class OneBotAdapter:
                     auto_escape = params.get('auto_escape', False)
                     message_id = await self.api.send_group_msg(group_ud, message_array, auto_escape)
                     response.update({
-                        "status": "success",
+                        "status": "ok",
                         "retcode": 0,
                         "data": {
                             "message_id": message_id
@@ -43,9 +43,9 @@ class OneBotAdapter:
                     user_id = int(params.get('user_id', 0))
                     message_array = params.get('messages', [])
                     auto_escape = params.get('auto_escape', False)
-                    message_id = self.api.send_private_msg(user_id, message_array, auto_escape)
+                    message_id = await self.api.send_private_msg(user_id, message_array, auto_escape)
                     response.update({
-                        "status": "success",
+                        "status": "ok",
                         "retcode": 0,
                         "data": {
                             "message_id": message_id
@@ -56,15 +56,45 @@ class OneBotAdapter:
                 except Exception as e:
                     print(f"Error: send_private_msg failed!! {e}")
 
+
             elif action == 'get_group_info':
                 if params is None:
                     print("Error: get_group_info() 缺少参数!!")
-                    return
+
+                    response.update({
+                        "status": "failed",
+                        "retcode": 1003,
+                        "message": "Missing 'group_id' parameter."
+                    })
+
+                    return response
+
                 try:
                     group_id = int(params.get('group_id', 0))
-                    self.api.get_group_info(group_id)
+
+                    if not group_id:
+                        raise ValueError("Invalid group_id: 0")
+
+                    group_data = await self.api.get_group_info(group_id)
+
+                    response.update({
+                        "status": "ok",
+                        "retcode": 0,
+                        "data": group_data,
+                        "message": ""
+                    })
+
+                except ValueError as ve:
+                    print(f"Error: get_group_info failed!! {ve}")
+                    response.update({
+                        "status": "failed",
+                        "retcode": 1002,
+                        "message": str(ve)
+                    })
+
                 except Exception as e:
                     print(f"Error: get_group_info failed!! {e}")
+                    response["message"] = f"Error executing get_group_info: {e}"
 
             else:
                 print(f"Unknown action!! {action}")
