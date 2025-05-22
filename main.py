@@ -1,15 +1,17 @@
 import asyncio
 import json
+from typing import Coroutine
 
-from pycparser.ply.yacc import token
-from telegram.ext import Updater, MessageHandler, CommandHandler
+from telegram.ext import MessageHandler, filters, Application
+
 from config import load_config
 from websocket_client import websocket_handler
 
 
-def telegram_message_to_onebot(bot, update, context):
+async def telegram_message_to_onebot(update, context) -> Coroutine:
     message = update.effective_message
     if message is None or message.from_user is None:
+        # TODO how to return
         return
     user = message.from_user
     nickname = user.username or (user.first_name + (user.last_name or ''))
@@ -49,6 +51,7 @@ def telegram_message_to_onebot(bot, update, context):
         })
     else:
         print(f"不支持的消息来源: {message.chat.type}")
+        # TODO how to return *2
         return
 
     ws = context.bot_data.get('ws')
@@ -61,23 +64,23 @@ def telegram_message_to_onebot(bot, update, context):
 
 def main():
     config = load_config()
-    updater = Updater(token=config.telegram_token, use_context=True)
-    dp = updater.dispatcher
-    dp.add_handler(MessageHandler(Filters.text & (Filters.chat_type.groups | Filters.chat_type.supergroup), telegram_message_to_onebot))
-    dp.add_handler(MessageHandler(Filters.text & Filters.chat_type.private, telegram_message_to_onebot))
-    updater.start_polling()
-    bot = updater.bot
-    loop = asyncio.get_event_loop()
-    bot_data = updater.dispatcher.bot_data
-    bot_data['ws'] = None
+    if config.proxy_url.strip() == "": application = Application.builder().token(config.telegram_token).proxy(config.proxy_url).get_updates_proxy(config.proxy_url).build()
+    else: application = Application.builder().token(config.telegram_token).build()
 
+    application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, telegram_message_to_onebot))
+    application.start_polling()
+    bot = application.bot
+    loop = asyncio.get_event_loop()
+    bot_data = application.bot_data
+    bot_data['ws'] = None
     bot_data['loop'] = loop
+
     try:
         loop.run_until_complete(websocket_handler(bot, config))
     except KeyboardInterrupt:
-        pass
+        print("正在优雅关闭Adapter...")
     finally:
-        updater.stop()
+        application.stop()
         loop.stop()
 
 if __name__ == "__main__":
