@@ -1,6 +1,5 @@
 import asyncio
 import json
-from types import coroutine
 from typing import Coroutine
 
 from telegram.ext import MessageHandler, filters, Application
