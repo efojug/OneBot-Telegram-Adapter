@@ -1,23 +1,22 @@
-import json
 from onebot_api import OneBotApi
 
 class OneBotAdapter:
     def __init__(self, bot):
         self.api = OneBotApi(bot)
 
-    async def handle_action(self, action: str, params: dict):
+    async def handle_action(self, action: str, params: dict, echo: str):
         response = {
             "status": "failed",
             "retcode": 1,
             "data": None,
-            "message": ""
+            "echo": echo
         }
         try:
-
             if action == 'send_group_msg':
                 if params is None:
                     print("Error: send_group_msg() 缺少参数!!")
                     return
+
                 try:
                     group_ud = int(params.get('group_id', 0))
                     message_array = params.get('messages', [])
@@ -39,6 +38,7 @@ class OneBotAdapter:
                 if params is None:
                     print("Error: send_private_msg() 缺少参数!!")
                     return
+
                 try:
                     user_id = int(params.get('user_id', 0))
                     message_array = params.get('messages', [])
@@ -66,7 +66,6 @@ class OneBotAdapter:
                         "retcode": 1003,
                         "message": "Missing 'group_id' parameter."
                     })
-
                     return response
 
                 try:

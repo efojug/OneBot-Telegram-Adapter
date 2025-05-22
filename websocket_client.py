@@ -42,10 +42,11 @@ async def websocket_handler(application, config):
                     try:
                         decoded_data = json.loads(message)
                         action = decoded_data.get('action')
-                        params = decoded_data.get("params", {})
+                        params = decoded_data.get('params', {})
+                        echo = decoded_data.get('echo', "")
 
                         if action:
-                            response_data = await adapter.handle_action(action, params)
+                            response_data = await adapter.handle_action(action, params, echo)
                         else:
                             print(f"Missing action in message: {message}")
                             response_data = {
@@ -76,10 +77,10 @@ async def websocket_handler(application, config):
                     if response_data:
                         try:
                             await ws.send(json.dumps(response_data))
-                            print(f"Sent response: {json.dumps(response_data)}")
+                            print(f"发送响应: {json.dumps(response_data)}")
                         except Exception as e:
                             print(f"发送响应失败!! {e}")
-
+                    else: print("无响应?")
 
         except ConnectionClosed as e:
             print(f"WebSocket 连接关闭: {e}\n将在10秒后自动重连")

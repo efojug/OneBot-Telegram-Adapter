@@ -11,11 +11,9 @@ from websocket_client import websocket_handler
 def _handle_ws_send_result(fut: asyncio.Future, event_details: str):
     try:
         fut.result()
+        print("事件发送成功")
     except Exception as e:
-        print(f"WebSocket send operation for event {event_details} failed: {e}")
-
-async def do_nothing()-> None:
-    ...
+        print(f"事件发送失败: {event_details}\n因为: {e}")
 
 async def telegram_message_to_onebot(update, context) -> None:
     message = update.effective_message
@@ -28,7 +26,8 @@ async def telegram_message_to_onebot(update, context) -> None:
         nickname = "匿名用户"
 
     time = message.date.timestamp()
-    self_id = context.bot.get_me().id
+    me = await context.bot.get_me()
+    self_id = me.id
     raw_text = message.text or ""
 
     event = {
@@ -83,7 +82,7 @@ async def telegram_message_to_onebot(update, context) -> None:
             send_task.add_done_callback(
                 lambda fut: _handle_ws_send_result(fut, f"type {event['message_type']}, id {message.message_id}")
             )
-            print(f"Scheduled event to be sent to OneBot: (msg_id: {message.message_id})")
+            print(f"收到消息，计划发送至OneBot message_id: {message.message_id}")
         except Exception as e:
             print(f"发送OneBot事件失败!! {e}")
 
