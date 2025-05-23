@@ -8,9 +8,10 @@ class OneBotAdapter:
         response = {
             "status": "failed",
             "retcode": 1,
-            "data": None,
-            "echo": echo
+            "data": None
         }
+        if echo: response.update({"echo": echo})
+
         try:
             if action == 'send_group_msg':
                 if params is None:

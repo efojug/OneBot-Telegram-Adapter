@@ -43,7 +43,7 @@ async def websocket_handler(application, config):
                         decoded_data = json.loads(message)
                         action = decoded_data.get('action')
                         params = decoded_data.get('params', {})
-                        echo = decoded_data.get('echo', "")
+                        echo = decoded_data.get('echo')
 
                         if action:
                             response_data = await adapter.handle_action(action, params, echo)
